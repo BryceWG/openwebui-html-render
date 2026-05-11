@@ -116,6 +116,45 @@
     </article>
 
     <article>
+      <p dir="auto">下面模拟完整 HTML 文档。</p>
+      &lt;!doctype html&gt;
+      &lt;html&gt;
+        &lt;head&gt;
+          &lt;style&gt;
+            .doc-card-test{border:1px solid #0891b2;border-radius:8px;padding:12px;background:#ecfeff;color:#164e63}
+          &lt;/style&gt;
+        &lt;/head&gt;
+        &lt;body style="margin:0"&gt;
+          &lt;main class="doc-card-test"&gt;
+            &lt;h3&gt;完整文档已渲染&lt;/h3&gt;
+            &lt;p&gt;head 中的 style 会保留，body 内容会被提取到预览区。&lt;/p&gt;
+          &lt;/main&gt;
+        &lt;/body&gt;
+      &lt;/html&gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟多个相邻根节点和 void 标签。</p>
+      &lt;h3&gt;多根节点&lt;/h3&gt;
+      &lt;p&gt;第一段&lt;br&gt;第二行&lt;/p&gt;
+      &lt;hr&gt;
+      &lt;img alt="内联图片" width="180" height="80" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='80'%3E%3Crect width='180' height='80' fill='%23ecfdf5'/%3E%3Ctext x='90' y='45' text-anchor='middle' font-family='Arial' font-size='16' fill='%23065f46'%3Eimage ok%3C/text%3E%3C/svg%3E"&gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟 UI mockup 里的表单控件。</p>
+      &lt;form style="display:flex; gap:8px; align-items:center; margin:12px 0;"&gt;
+        &lt;input value="保留为禁用态" style="border:1px solid #94a3b8;border-radius:6px;padding:8px;"&gt;
+        &lt;button style="border:1px solid #0f766e;border-radius:6px;padding:8px 12px;background:#ccfbf1;color:#134e4a;"&gt;按钮可见&lt;/button&gt;
+      &lt;/form&gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟 OpenWebUI 将 SVG 源码拆成多个相邻文本节点。</p>
+      <div id="split-svg-html-node"></div>
+    </article>
+
+    <article>
       <p dir="auto">下面模拟流式输出尚未完成的半截 HTML，不应该提前渲染。</p>
       &lt;div style="border:1px solid #ddd; padding:8px;"&gt;
         &lt;div&gt;半截内容&lt;/div&gt;
@@ -124,6 +163,11 @@
     <article>
       <p dir="auto">下面模拟同一个文本节点持续流式追加。</p>
       <div id="streaming-html-node"></div>
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟先渲染第一段 HTML，再流式追加第二段 HTML。</p>
+      <div id="two-block-streaming-node"></div>
     </article>
 
     <script>
@@ -146,11 +190,63 @@
     </script>
     <script src="../openwebui-html-renderer.user.js"></script>
     <script>
+      const splitSvgHtml = `<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin: 15px 0;">
+  <svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+    <!-- Nodes -->
+    <rect x="20" y="110" width="100" height="40" rx="5" fill="#e7f3ff" stroke="#007bff" stroke-width="2"/>
+    <text x="70" y="135" text-anchor="middle" font-size="14" font-weight="bold">苔藓纤维 (MF)</text>
+
+    <rect x="20" y="210" width="100" height="40" rx="5" fill="#fff3cd" stroke="#856404" stroke-width="2"/>
+    <text x="70" y="235" text-anchor="middle" font-size="14" font-weight="bold">攀缘纤维 (CF)</text>
+
+    <rect x="200" y="110" width="100" height="40" rx="5" fill="#d4edda" stroke="#28a745" stroke-width="2"/>
+    <text x="250" y="135" text-anchor="middle" font-size="14" font-weight="bold">颗粒细胞 (GrC)</text>
+
+    <rect x="400" y="110" width="120" height="40" rx="5" fill="#f8d7da" stroke="#dc3545" stroke-width="2"/>
+    <text x="460" y="135" text-anchor="middle" font-size="14" font-weight="bold">浦肯野细胞 (PC)</text>
+
+    <rect x="620" y="110" width="120" height="40" rx="5" fill="#e2e3e5" stroke="#383d41" stroke-width="2"/>
+    <text x="680" y="135" text-anchor="middle" font-size="14" font-weight="bold">深部核团 (DCN)</text>
+
+    <!-- Paths -->
+    <line x1="120" y1="130" x2="200" y2="130" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="300" y1="130" x2="400" y2="130" stroke="#000" stroke-width="2" stroke-dasharray="4" marker-end="url(#arrow)"/>
+    <text x="350" y="120" text-anchor="middle" font-size="12">平行纤维</text>
+
+    <path d="M 120 230 L 460 230 L 460 150" fill="none" stroke="#dc3545" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="290" y="220" text-anchor="middle" font-size="12" fill="#dc3545">误差信号 (修正权值)</text>
+
+    <line x1="520" y1="130" x2="620" y2="130" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="570" y="120" text-anchor="middle" font-size="12">抑制性投射</text>
+
+    <line x1="740" y1="130" x2="780" y2="130" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- Markers -->
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L9,3 z" fill="#000" />
+      </marker>
+    </defs>
+  </svg>
+  <div style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">
+    图 1：小脑微电路信号传递简图
+  </div>
+</div>`;
+      const splitSvgNode = document.getElementById('split-svg-html-node');
+      splitSvgHtml.split(/(\n)/).forEach((chunk) => splitSvgNode.append(document.createTextNode(chunk)));
+
       const streamingNode = document.createTextNode('<div style="border:1px solid #2563eb; border-radius:8px; padding:10px; background:#eff6ff;"><strong>流式预览</strong><div>第一段');
       document.getElementById('streaming-html-node').append(streamingNode);
       setTimeout(() => {
         streamingNode.nodeValue += ' + 第二段已更新</div></div>';
       }, 400);
+
+      const twoBlockNode = document.getElementById('two-block-streaming-node');
+      twoBlockNode.append(document.createTextNode('<div style="border:1px solid #2563eb;border-radius:8px;padding:10px;background:#eff6ff;"><strong>第一段流式 HTML</strong><div>这段会先闭合并渲染。</div></div>'));
+      setTimeout(() => {
+        twoBlockNode.append(document.createTextNode('\n\n## 中间 Markdown 标题\n\n这一段普通文字会夹在两段 HTML 之间。\n\n'));
+        twoBlockNode.append(document.createTextNode('<div style="border:1px solid #16a34a;border-radius:8px;padding:10px;background:#f0fdf4;"><strong>第二段流式 HTML</strong><div>这段追加后也应该立刻渲染。</div></div>'));
+      }, 650);
     </script>
   </body>
 </html>

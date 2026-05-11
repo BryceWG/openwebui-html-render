@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpenWebUI HTML Renderer
 // @namespace    https://openwebui.com/
-// @version      1.1.0
+// @version      1.2.2
 // @description  Render plain HTML text blocks in OpenWebUI messages.
 // @author       local
 // @match        http://localhost:3000/*
@@ -20,6 +20,28 @@
   const ROOT_CLASS = 'owui-html-renderer';
   const SOURCE_CLASS = 'owui-html-renderer-source';
   const ENABLED_KEY = 'owuiHtmlRenderer.enabled';
+  const MIN_HTML_LENGTH = 4;
+  const MAX_HTML_LENGTH = 100000;
+  const VOID_TAGS = new Set([
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'param',
+    'source',
+    'track',
+    'wbr',
+  ]);
+  const RAW_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'title']);
+  const NON_RENDERABLE_TAGS = new Set(['BASE', 'LINK', 'META', 'SCRIPT', 'STYLE', 'TEMPLATE', 'TITLE']);
+  const OPTIONAL_CLOSE_TAGS = new Set(['COLGROUP', 'DD', 'DT', 'LI', 'OPTGROUP', 'OPTION', 'P', 'RB', 'RP', 'RT', 'RTC', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR']);
+  const STATIC_CONTROL_TAGS = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
   const enabled = GM_getValue(ENABLED_KEY, true);
   const ignoredTextNodes = new WeakSet();
   const pendingRoots = new Set();
@@ -149,7 +171,7 @@
     const parent = node.parentElement;
     if (!parent || shouldSkip(parent)) return false;
 
-    if (extractHtml(node.nodeValue || '')) return true;
+    if (buildHtmlBlock(node)) return true;
 
     ignoredTextNodes.add(node);
     return false;
@@ -163,29 +185,24 @@
   }
 
   function renderTextNode(textNode) {
-    const stylePrefix = collectStylePrefix(textNode);
-    const html = `${stylePrefix.html}${extractHtml(textNode.nodeValue || '')}`;
-    const parent = textNode.parentNode;
-    if (!html || !parent) return;
+    if (!textNode.isConnected || !textNode.parentElement || shouldSkip(textNode.parentElement)) return;
 
-    const source = document.createElement('span');
-    source.className = SOURCE_CLASS;
-    source.textContent = textNode.nodeValue || '';
+    const block = buildHtmlBlock(textNode);
+    if (!block) return;
 
     const wrapper = document.createElement('section');
     wrapper.className = ROOT_CLASS;
 
     const host = document.createElement('div');
     const shadow = host.attachShadow({ mode: 'open' });
-    const sanitized = sanitize(html);
+    const sanitized = sanitize(block.html);
     shadow.append(baseStyle(), htmlFragment(sanitized));
 
-    wrapper.append(makeTools(wrapper, host, sanitized, html));
+    wrapper.append(makeTools(wrapper, host, sanitized, block.sourceHtml));
     wrapper.append(host);
 
-    parent.replaceChild(source, textNode);
-    stylePrefix.nodes.forEach(hideSourceNode);
-    source.after(wrapper);
+    const anchor = hideSourceNodes(block.nodes);
+    if (anchor) anchor.after(wrapper);
   }
 
   function makeTools(wrapper, host, sanitizedHtml, sourceHtml) {
@@ -331,6 +348,107 @@
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
   }
 
+  function buildHtmlBlock(textNode) {
+    const run = collectHtmlRun(textNode);
+    if (!run) return null;
+
+    const stylePrefix = collectStylePrefix(textNode);
+    const sourceHtml = `${stylePrefix.html}${run.source}`;
+    const html = `${stylePrefix.html}${run.html}`;
+    const nodes = uniqueNodes([...stylePrefix.nodes, ...run.nodes]);
+
+    return { html, nodes, sourceHtml };
+  }
+  function collectHtmlRun(startNode) {
+    if (!startNode || !startNode.parentNode || hasPreviousSourceSibling(startNode)) return null;
+
+    const firstSource = sourceText(startNode);
+    if (!startsLikeHtml(stripMarkdownFence(decodeEntities(firstSource.trim())))) return null;
+
+    const nodes = [];
+    let source = '';
+    let current = startNode;
+
+    while (current && source.length <= MAX_HTML_LENGTH) {
+      const chunk = sourceText(current);
+      const isWhitespace = current.nodeType === Node.TEXT_NODE && !chunk.trim();
+
+      if (current !== startNode && !isWhitespace && !looksLikeHtmlSource(chunk) && extractHtml(source)) break;
+      if (!isWhitespace && !isCollectableSourceNode(current, chunk, source)) break;
+
+      source += chunk;
+      if (!isWhitespace && current.nodeType !== Node.COMMENT_NODE) nodes.push(current);
+
+      const html = extractHtml(source);
+      if (html) return { html, nodes, source };
+
+      current = nextSourceSibling(current);
+    }
+
+    return null;
+  }
+
+  function hasPreviousSourceSibling(node) {
+    let current = previousSourceSibling(node);
+    while (current) {
+      const text = sourceText(current);
+      if (text.trim()) return startsLikeHtmlSource(text);
+      current = previousSourceSibling(current);
+    }
+
+    return false;
+  }
+
+  function previousSourceSibling(node) {
+    let current = node.previousSibling;
+    while (current && isIgnorableRunSibling(current)) current = current.previousSibling;
+    return current;
+  }
+
+  function nextSourceSibling(node) {
+    let current = node.nextSibling;
+    while (current && current.nodeType === Node.COMMENT_NODE) current = current.nextSibling;
+    return current;
+  }
+
+  function isIgnorableRunSibling(node) {
+    return (
+      node.nodeType === Node.COMMENT_NODE ||
+      (node.nodeType === Node.ELEMENT_NODE && (node.classList.contains(SOURCE_CLASS) || node.classList.contains(ROOT_CLASS)))
+    );
+  }
+
+  function isCollectableSourceNode(node, chunk, currentSource) {
+    if (node.nodeType === Node.TEXT_NODE) return true;
+    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    if (shouldSkip(node)) return false;
+    if (node.classList.contains(SOURCE_CLASS) || node.classList.contains(ROOT_CLASS)) return false;
+    if (node.tagName === 'BR') return true;
+
+    return Boolean(currentSource || looksLikeHtmlSource(chunk));
+  }
+
+  function sourceText(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return '\n';
+    if (node.nodeType === Node.ELEMENT_NODE) return node.textContent || '';
+    return '';
+  }
+
+  function looksLikeHtmlSource(text) {
+    const source = decodeEntities(text).trim();
+    return startsLikeHtmlSource(text) || /<\/?[a-z][\w:-]*(?:\s|>|\/)/i.test(source);
+  }
+
+  function startsLikeHtmlSource(text) {
+    const source = decodeEntities(text).trim();
+    return /^(?:<\/?[a-z][\w:-]*(?:\s|>|\/)|<!--|<!doctype\b|<\?xml\b)/i.test(source);
+  }
+
+  function uniqueNodes(nodes) {
+    return nodes.filter((node, index) => node && nodes.indexOf(node) === index);
+  }
+
   function collectStylePrefix(textNode) {
     const nodes = [];
     let html = '';
@@ -384,16 +502,29 @@
   function hideSourceNode(node) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       node.classList.add(SOURCE_CLASS);
-      return;
+      return node;
     }
 
     const parent = node.parentNode;
-    if (!parent) return;
+    if (!parent) return null;
 
     const source = document.createElement('span');
     source.className = SOURCE_CLASS;
     source.textContent = node.nodeValue || '';
     parent.replaceChild(source, node);
+    return source;
+  }
+
+  function hideSourceNodes(nodes) {
+    let anchor = null;
+
+    nodes.forEach((node) => {
+      if (!node || !node.isConnected) return;
+      const hidden = hideSourceNode(node);
+      if (hidden) anchor = hidden;
+    });
+
+    return anchor;
   }
 
   function shouldSkip(element) {
@@ -405,63 +536,163 @@
 
   function extractHtml(text) {
     const raw = text.replace(/\r\n?/g, '\n').trim();
-    if (raw.length < 24 || raw.length > 50000) return '';
+    if (raw.length < MIN_HTML_LENGTH || raw.length > MAX_HTML_LENGTH) return '';
     if (!raw.includes('<') && !raw.includes('&lt;')) return '';
     if (!raw.includes('>') && !raw.includes('&gt;')) return '';
 
-    const source = decodeEntities(raw).trim();
-    if (source.length < 24 || source.length > 50000) return '';
+    const source = stripMarkdownFence(decodeEntities(raw).trim());
+    if (source.length < MIN_HTML_LENGTH || source.length > MAX_HTML_LENGTH) return '';
+    if (!startsLikeHtml(source)) return '';
+    if (!hasBalancedHtml(source)) return '';
 
-    const open = source.match(/<(div|section|article|main|aside|header|footer|table|ul|ol|p|span|h[1-6]|details|blockquote|figure|svg|canvas)\b[^>]*>/i);
-    if (!open || open.index === undefined) return '';
+    const normalized = normalizeHtml(source);
+    if (!normalized || !hasRenderableHtml(sanitize(normalized))) return '';
 
-    const start = open.index;
-    const renderStart = findStylePrefixStart(source, start);
-    const tag = open[1].toLowerCase();
-    const tagPattern = new RegExp(`<\\/?${escapeRegExp(tag)}\\b[^>]*>`, 'gi');
-    tagPattern.lastIndex = start;
+    return normalized;
+  }
 
-    let depth = 0;
+  function stripMarkdownFence(source) {
+    const match = source.match(/^```(?:html?|xml|svg)?[^\S\n]*\n([\s\S]*?)\n```$/i);
+    return match ? match[1].trim() : source;
+  }
+
+  function startsLikeHtml(source) {
+    const candidate = source
+      .replace(/^\s*(?:<!--[\s\S]*?-->\s*)*/, '')
+      .replace(/^<\?xml\b[\s\S]*?\?>\s*/i, '')
+      .trimStart();
+    return /^(?:<!doctype\s+html\b[^>]*>\s*)?(?:<html\b|<head\b|<body\b|<style\b|<[a-z][\w:-]*(?:\s|>|\/>))/i.test(candidate);
+  }
+
+  function hasBalancedHtml(source) {
+    const cleaned = source
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<!doctype\b[^>]*>/gi, '')
+      .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '');
+    const tagPattern = /<\/?([a-zA-Z][\w:-]*)(?:\s+(?:"[^"]*"|'[^']*'|[^'"<>])*)?\s*\/?>/g;
+    const stack = [];
     let match;
 
-    while ((match = tagPattern.exec(source))) {
+    while ((match = tagPattern.exec(cleaned))) {
       const token = match[0];
-      if (/^<\//.test(token)) {
-        depth -= 1;
-      } else if (!/\/>$/.test(token)) {
-        depth += 1;
+      const tag = match[1].toUpperCase();
+      const lowerTag = tag.toLowerCase();
+      const isClosing = token.startsWith('</');
+      const isSelfClosing = /\/\s*>$/.test(token) || VOID_TAGS.has(lowerTag);
+
+      if (isClosing) {
+        while (stack.length && stack[stack.length - 1] !== tag && OPTIONAL_CLOSE_TAGS.has(stack[stack.length - 1])) {
+          stack.pop();
+        }
+
+        if (stack[stack.length - 1] !== tag) return false;
+        stack.pop();
+        continue;
       }
 
-      if (depth === 0) {
-        const html = source.slice(renderStart, match.index + token.length).trim();
-        return looksLikeHtml(html) ? html : '';
+      while (stack.length && canAutoCloseBefore(stack[stack.length - 1], tag)) {
+        stack.pop();
       }
+
+      if (RAW_TEXT_TAGS.has(lowerTag) && !isSelfClosing) {
+        const closePattern = new RegExp(`<\\/${escapeRegExp(lowerTag)}\\s*>`, 'gi');
+        closePattern.lastIndex = tagPattern.lastIndex;
+        const close = closePattern.exec(cleaned);
+        if (!close) return false;
+        tagPattern.lastIndex = close.index + close[0].length;
+        continue;
+      }
+
+      if (!isSelfClosing) stack.push(tag);
     }
 
-    return '';
+    while (stack.length && OPTIONAL_CLOSE_TAGS.has(stack[stack.length - 1])) {
+      stack.pop();
+    }
+
+    return stack.length === 0;
   }
 
-  function looksLikeHtml(html) {
-    return /<[a-z][\w:-]*(?:\s[^<>]*)?>/i.test(html) && /<([a-z][\w:-]*)(?:\s[^<>]*)?>[\s\S]*<\/\1>/i.test(html);
+  function canAutoCloseBefore(openTag, nextTag) {
+    if (openTag === 'P' && !['A', 'SPAN', 'STRONG', 'EM', 'B', 'I', 'U', 'SMALL', 'SUB', 'SUP', 'CODE', 'BR', 'IMG'].includes(nextTag)) return true;
+    if (openTag === 'LI' && nextTag === 'LI') return true;
+    if ((openTag === 'DT' || openTag === 'DD') && (nextTag === 'DT' || nextTag === 'DD')) return true;
+    if ((openTag === 'TD' || openTag === 'TH') && (nextTag === 'TD' || nextTag === 'TH')) return true;
+    if (openTag === 'TR' && nextTag === 'TR') return true;
+    if (openTag === 'OPTION' && nextTag === 'OPTION') return true;
+    if (openTag === 'OPTGROUP' && nextTag === 'OPTGROUP') return true;
+    return false;
   }
 
-  function findStylePrefixStart(source, rootStart) {
-    const prefix = source.slice(0, rootStart);
-    const stylePrefix = prefix.match(/(?:\s*<style\b[^>]*>[\s\S]*?<\/style>\s*)+$/i);
-    return stylePrefix ? rootStart - stylePrefix[0].length : rootStart;
+  function normalizeHtml(source) {
+    if (isFullDocumentHtml(source)) {
+      const doc = new DOMParser().parseFromString(source, 'text/html');
+      const styles = [...doc.head.querySelectorAll('style')].map((style) => style.outerHTML).join('\n');
+      const body = document.createElement('div');
+      [...doc.body.attributes].forEach((attr) => body.setAttribute(attr.name, attr.value));
+      body.innerHTML = doc.body.innerHTML;
+      const bodyHtml = body.hasAttributes() ? body.outerHTML : doc.body.innerHTML;
+      return `${styles}\n${bodyHtml}`.trim();
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = source;
+    return template.innerHTML.trim();
+  }
+
+  function isFullDocumentHtml(source) {
+    return /^\s*(?:<!doctype\s+html\b[^>]*>\s*)?<html\b/i.test(source) || /<(?:head|body)\b/i.test(source);
+  }
+
+  function hasRenderableHtml(html) {
+    if (!html.trim()) return false;
+
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return hasRenderableNode(template.content);
+  }
+
+  function hasRenderableNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return Boolean(node.nodeValue.trim());
+    if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return false;
+    if (node.nodeType === Node.ELEMENT_NODE && NON_RENDERABLE_TAGS.has(node.tagName)) return false;
+
+    if (node.nodeType === Node.ELEMENT_NODE) return true;
+
+    return [...node.childNodes].some(hasRenderableNode);
   }
 
   function sanitize(html) {
     const template = document.createElement('template');
     template.innerHTML = html;
-    template.content.querySelectorAll('script, object, embed, link, meta, base, form, input, button, textarea, select, option').forEach((node) => node.remove());
+    template.content.querySelectorAll('script, object, embed, link, meta, base').forEach((node) => node.remove());
+    template.content.querySelectorAll('form').forEach((form) => {
+      const replacement = document.createElement('div');
+      [...form.attributes].forEach((attr) => {
+        if (!['action', 'method', 'target'].includes(attr.name.toLowerCase())) {
+          replacement.setAttribute(attr.name, attr.value);
+        }
+      });
+      while (form.firstChild) replacement.append(form.firstChild);
+      form.replaceWith(replacement);
+    });
 
     template.content.querySelectorAll('*').forEach((node) => {
+      if (STATIC_CONTROL_TAGS.has(node.tagName)) {
+        node.setAttribute('disabled', '');
+      }
+
       [...node.attributes].forEach((attr) => {
         const name = attr.name.toLowerCase();
         const value = attr.value.trim();
 
-        if (/^on/i.test(name) || name === 'srcdoc' || name === 'autofocus') {
+        if (
+          /^on/i.test(name) ||
+          name === 'srcdoc' ||
+          name === 'autofocus' ||
+          name === 'formaction' ||
+          name === 'form'
+        ) {
           node.removeAttribute(attr.name);
           return;
         }
