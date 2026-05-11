@@ -19,6 +19,8 @@
 
 ## 安装
 
+一键安装，或者：
+
 1. 安装 Tampermonkey、Violentmonkey 或其他兼容用户脚本管理器。
 2. 打开 [openwebui-html-renderer.user.js](./openwebui-html-renderer.user.js)。
 3. 将脚本内容复制到用户脚本管理器，保存启用。
