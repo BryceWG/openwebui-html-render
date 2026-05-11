@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenWebUI HTML Renderer Test</title>
+    <style>
+      body {
+        max-width: 920px;
+        margin: 40px auto;
+        padding: 0 20px;
+        color: #111827;
+        font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .message {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      pre {
+        overflow: auto;
+        padding: 12px;
+        border-radius: 8px;
+        background: #f3f4f6;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>OpenWebUI HTML Renderer Test</h1>
+
+    <article class="message">
+      <h2>功能分区与输出效应</h2>
+      <p>不同小脑区域通过特定核团调控不同运动模态：</p>
+      <pre><code class="language-html">&lt;div style="display:flex; gap:12px; margin:16px 0; flex-wrap:wrap;"&gt;
+  &lt;div style="flex:1; min-width:180px; border:1px solid #bdc3c7; border-radius:8px; padding:12px; background:#fafafa;"&gt;
+    &lt;div style="font-weight:bold; border-bottom:1px solid #aaa; margin-bottom:6px;"&gt;小脑半球&lt;/div&gt;
+    &lt;div&gt;支配肢体精细运动&lt;br&gt;运动学习（如打字、乐器）&lt;br&gt;齿状核→丘脑→皮层&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div style="flex:1; min-width:180px; border:1px solid #bdc3c7; border-radius:8px; padding:12px; background:#fafafa;"&gt;
+    &lt;div style="font-weight:bold; border-bottom:1px solid #aaa; margin-bottom:6px;"&gt;小脑蚓部&lt;/div&gt;
+    &lt;div&gt;躯干姿势与步态&lt;br&gt;眼动控制&lt;br&gt;顶核→前庭/网状结构&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div style="flex:1; min-width:180px; border:1px solid #bdc3c7; border-radius:8px; padding:12px; background:#fafafa;"&gt;
+    &lt;div style="font-weight:bold; border-bottom:1px solid #aaa; margin-bottom:6px;"&gt;绒球小结叶&lt;/div&gt;
+    &lt;div&gt;前庭眼动反射&lt;br&gt;平衡与空间定向&lt;br&gt;前庭核直接投射&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+    </article>
+
+    <article data-openwebui-like="assistant">
+      <h2>裸 HTML 文本</h2>
+      <p>下面模拟模型没有使用代码块，直接输出 HTML：</p>
+      <div>
+        &lt;div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin:12px 0;"&gt;
+        &lt;div style="border:1px solid #94a3b8; border-radius:8px; padding:10px; background:#f8fafc;"&gt;
+        &lt;strong&gt;前庭小脑&lt;/strong&gt;&lt;br&gt;
+        平衡、眼动、姿势控制
+        &lt;/div&gt;
+        &lt;div style="border:1px solid #94a3b8; border-radius:8px; padding:10px; background:#f8fafc;"&gt;
+        &lt;strong&gt;脊髓小脑&lt;/strong&gt;&lt;br&gt;
+        步态、肌张力、躯干协调
+        &lt;/div&gt;
+        &lt;/div&gt;
+      </div>
+    </article>
+
+    <article class="w-full space-y-1">
+      <p dir="auto">下面模拟 OpenWebUI / Svelte 输出：HTML 片段是元素之间的裸文本节点。</p>
+      <!----><!----><!---->&lt;div style="display:flex; gap:12px; margin:16px 0; flex-wrap:wrap;"&gt;
+  &lt;div style="flex:1; min-width:180px; border:1px solid #bdc3c7; border-radius:8px; padding:12px; background:#fafafa;"&gt;
+    &lt;div style="font-weight:bold; border-bottom:1px solid #aaa; margin-bottom:6px;"&gt;裸文本节点 A&lt;/div&gt;
+    &lt;div&gt;这段没有任何代码块包裹。&lt;br&gt;它和你贴出来的 DOM 结构更接近。&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div style="flex:1; min-width:180px; border:1px solid #bdc3c7; border-radius:8px; padding:12px; background:#fafafa;"&gt;
+    &lt;div style="font-weight:bold; border-bottom:1px solid #aaa; margin-bottom:6px;"&gt;裸文本节点 B&lt;/div&gt;
+    &lt;div&gt;预览应该插在这段 HTML 文本后面。&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      <!----><!---->
+      <p dir="auto">HTML 片段后面的普通段落不应该被吞进预览。</p>
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟文本节点里保存的是字面量 &amp;lt;div&amp;gt;，不是真实尖括号。</p>
+      &amp;lt;div style="display:flex; gap:8px; margin:12px 0;"&amp;gt;
+        &amp;lt;div style="border:1px solid #0f766e; border-radius:8px; padding:10px; background:#ecfdf5;"&amp;gt;
+          &amp;lt;strong&amp;gt;实体编码 HTML&amp;lt;/strong&amp;gt;&amp;lt;br&amp;gt;
+          这段需要先解码 &amp;amp;lt; 和 &amp;amp;gt; 才能渲染。
+        &amp;lt;/div&amp;gt;
+      &amp;lt;/div&amp;gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟带 style 标签的 HTML。</p>
+      &lt;style&gt;
+        .cerebellum-box-test{font-family:system-ui;border:1px solid #d0d7de;border-radius:10px;padding:14px;margin:12px 0;background:#fbfbfd}
+        .cerebellum-flow-test{display:grid;grid-template-columns:1fr .25fr 1fr;gap:8px;align-items:center}
+        .c-node-test{border:1px solid #b6c2cf;border-radius:8px;padding:10px;background:white}
+        .arrow-test{text-align:center;font-weight:700;color:#64748b}
+      &lt;/style&gt;
+      &lt;div class="cerebellum-box-test"&gt;
+        &lt;div class="cerebellum-flow-test"&gt;
+          &lt;div class="c-node-test"&gt;&lt;strong&gt;输入上下文&lt;/strong&gt;&lt;br&gt;&lt;small&gt;皮层运动计划、本体感觉、前庭等&lt;/small&gt;&lt;/div&gt;
+          &lt;div class="arrow-test"&gt;→&lt;/div&gt;
+          &lt;div class="c-node-test"&gt;&lt;strong&gt;小脑深部核&lt;/strong&gt;&lt;br&gt;&lt;small&gt;输出校正后的控制信号&lt;/small&gt;&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟 style 和主体被拆到相邻元素。</p>
+      <div>&lt;style&gt;.split-style-card{border:2px solid #7c3aed;background:#f5f3ff;border-radius:8px;padding:12px;color:#3b0764;font-weight:700}&lt;/style&gt;</div>
+      <div>&lt;div class="split-style-card"&gt;分离 style 节点已生效&lt;/div&gt;</div>
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟流式输出尚未完成的半截 HTML，不应该提前渲染。</p>
+      &lt;div style="border:1px solid #ddd; padding:8px;"&gt;
+        &lt;div&gt;半截内容&lt;/div&gt;
+    </article>
+
+    <article>
+      <p dir="auto">下面模拟同一个文本节点持续流式追加。</p>
+      <div id="streaming-html-node"></div>
+    </article>
+
+    <script>
+      window.GM_addStyle = function (css) {
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.append(style);
+      };
+      window.GM_registerMenuCommand = function () {};
+      window.GM_setValue = function (key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+      };
+      window.GM_getValue = function (key, fallback) {
+        const value = localStorage.getItem(key);
+        return value === null ? fallback : JSON.parse(value);
+      };
+      window.GM_setClipboard = function (text) {
+        navigator.clipboard.writeText(text);
+      };
+    </script>
+    <script src="../openwebui-html-renderer.user.js"></script>
+    <script>
+      const streamingNode = document.createTextNode('<div style="border:1px solid #2563eb; border-radius:8px; padding:10px; background:#eff6ff;"><strong>流式预览</strong><div>第一段');
+      document.getElementById('streaming-html-node').append(streamingNode);
+      setTimeout(() => {
+        streamingNode.nodeValue += ' + 第二段已更新</div></div>';
+      }, 400);
+    </script>
+  </body>
+</html>
