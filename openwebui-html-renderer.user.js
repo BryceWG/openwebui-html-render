@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         OpenWebUI HTML Renderer
 // @namespace    https://github.com/BryceWG/openwebui-html-render
-// @version      1.2.2
+// @version      1.2.3
 // @description  Render plain HTML text blocks in OpenWebUI messages.
 // @author       BryceWG
-// @match        http://localhost:3000/*
-// @match        http://127.0.0.1:3000/*
-// @match        https://owu.xxxx/*
+// @match        https://owu.*/c/*
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
@@ -117,7 +115,10 @@
         return;
       }
 
-      mutation.addedNodes.forEach(queueScan);
+      mutation.addedNodes.forEach((node) => {
+        queueScan(node);
+        queueSourceContext(node);
+      });
     });
 
     flushScan();
@@ -147,35 +148,32 @@
   }
 
   function scanRoot(root) {
-    const nodes = [];
+    const textNodes = [];
 
     if (root.nodeType === Node.TEXT_NODE) {
-      if (acceptTextNode(root)) nodes.push(root);
+      textNodes.push(root);
     } else if (root.nodeType === Node.ELEMENT_NODE) {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-          return acceptTextNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        },
-      });
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 
       while (walker.nextNode()) {
-        nodes.push(walker.currentNode);
+        textNodes.push(walker.currentNode);
       }
     }
 
+    const nodes = textNodes.map(prepareTextNodeForRender).filter(Boolean);
     nodes.forEach(renderTextNode);
   }
 
-  function acceptTextNode(node) {
+  function prepareTextNodeForRender(node) {
     if (ignoredTextNodes.has(node)) return false;
 
     const parent = node.parentElement;
     if (!parent || shouldSkip(parent)) return false;
 
-    if (buildHtmlBlock(node)) return true;
+    if (buildHtmlBlock(node)) return node;
 
     ignoredTextNodes.add(node);
-    return false;
+    return null;
   }
 
   function hasQueuedAncestor(root, roots) {
@@ -204,6 +202,44 @@
 
     const anchor = hideSourceNodes(block.nodes);
     if (anchor) anchor.after(wrapper);
+  }
+
+  function queueSourceContext(node) {
+    // A source start may be ignored before later streaming siblings complete it.
+    let context = sourceContextElement(node);
+    let depth = 0;
+
+    while (context && context !== document.body && context !== document.documentElement && depth < 2) {
+      forgetIgnoredTextNodes(context);
+      queueScan(context);
+      context = context.parentElement;
+      depth += 1;
+    }
+
+    const previous = previousSourceSibling(node);
+    if (!previous) return;
+
+    forgetIgnoredTextNodes(previous);
+    queueScan(previous);
+  }
+
+  function sourceContextElement(node) {
+    if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.ELEMENT_NODE) return node.parentElement;
+    return null;
+  }
+
+  function forgetIgnoredTextNodes(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      ignoredTextNodes.delete(node);
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      ignoredTextNodes.delete(walker.currentNode);
+    }
   }
 
   function makeTools(wrapper, host, sanitizedHtml, sourceHtml) {

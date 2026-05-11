@@ -170,6 +170,11 @@
       <div id="two-block-streaming-node"></div>
     </article>
 
+    <article>
+      <p dir="auto">下面模拟第二段较长 HTML 被拆成多个流式文本节点。</p>
+      <div id="chunked-second-html-node"></div>
+    </article>
+
     <script>
       window.GM_addStyle = function (css) {
         const style = document.createElement('style');
@@ -247,6 +252,19 @@
         twoBlockNode.append(document.createTextNode('\n\n## 中间 Markdown 标题\n\n这一段普通文字会夹在两段 HTML 之间。\n\n'));
         twoBlockNode.append(document.createTextNode('<div style="border:1px solid #16a34a;border-radius:8px;padding:10px;background:#f0fdf4;"><strong>第二段流式 HTML</strong><div>这段追加后也应该立刻渲染。</div></div>'));
       }, 650);
+
+      const chunkedSecondNode = document.getElementById('chunked-second-html-node');
+      chunkedSecondNode.append(document.createTextNode('<div style="border:1px solid #7c3aed;border-radius:8px;padding:10px;background:#faf5ff;"><strong>第一段已完成</strong><div>用于确认前一个渲染块不会影响后续块。</div></div>'));
+      setTimeout(() => {
+        chunkedSecondNode.append(document.createTextNode('\n\n### 第二段标题\n\n'));
+        chunkedSecondNode.append(document.createTextNode('<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">字段</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">'));
+      }, 850);
+      setTimeout(() => {
+        chunkedSecondNode.append(document.createTextNode('说明</th></tr></thead><tbody><tr><td style="border-bottom:1px solid #eee;padding:6px;">拆分节点</td><td style="border-bottom:1px solid #eee;padding:6px;">HTML 开头先到达，中间内容作为第二个文本节点到达。</td></tr>'));
+      }, 1250);
+      setTimeout(() => {
+        chunkedSecondNode.append(document.createTextNode('<tr><td style="padding:6px;">预期结果</td><td style="padding:6px;">无需刷新，补齐后自动渲染第二块。</td></tr></tbody></table>'));
+      }, 1650);
     </script>
   </body>
 </html>
