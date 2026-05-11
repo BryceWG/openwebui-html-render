@@ -2,6 +2,8 @@
 
 一个给 OpenWebUI 使用的 Tampermonkey / 油猴用户脚本。可以把模型直接输出的裸 HTML 文本块渲染成可视化内容，增加内容可读性。
 
+一键安装：[Greasy Fork - OpenWebUI HTML Renderer](https://greasyfork.org/zh-CN/scripts/577558-openwebui-html-renderer)
+
 ## 效果预览
 
 ![效果预览](./images/preview.png)
