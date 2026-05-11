@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         OpenWebUI HTML Renderer
-// @namespace    https://openwebui.com/
+// @namespace    https://github.com/BryceWG/openwebui-html-render
 // @version      1.2.2
 // @description  Render plain HTML text blocks in OpenWebUI messages.
-// @author       local
+// @author       BryceWG
 // @match        http://localhost:3000/*
 // @match        http://127.0.0.1:3000/*
 // @match        https://owu.xxxx/*
@@ -12,6 +12,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @run-at       document-idle
+// @license      MIT
 // ==/UserScript==
 
 (function () {
